@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="运动相机">
+<meta name="theme-color" content="#14171c">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>运动相机</title>
+<style>
+:root{
+  color-scheme:dark;
+  --body:#14171c;--panel:#1d2229;--line:#2f3742;--fg:#e9edf1;--muted:#8b95a3;
+  --accent:#f5c400;--on-accent:#17140a;--rec:#ff3b30;
+  --ui:"PingFang SC","MiSans","HarmonyOS Sans SC","Noto Sans CJK SC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--body);color:var(--fg);font-family:var(--ui);font-size:14px;display:flex;flex-direction:column;gap:10px;
+  padding:max(10px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;overflow:hidden}
+button,input{font:inherit;color:inherit}
+[hidden]{display:none!important}
+
+.stage{flex:1;min-width:0;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative}
+.finder{position:relative;border-radius:10px;overflow:hidden;background:#000;box-shadow:0 0 0 1px var(--line)}
+.finder canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.flash.on{animation:fl .25s ease-out}
+@keyframes fl{from{opacity:.85}to{opacity:0}}
+.note{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;color:var(--muted);line-height:1.6}
+.count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px;font-weight:700;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,.6);pointer-events:none}
+
+.panel{display:flex;flex-direction:column;gap:10px;min-width:0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+h1 span{color:var(--accent)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:none;border:0;padding:6px 10px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+.row{display:flex;align-items:center;gap:10px;min-width:0}
+.row > b{flex:none;font-size:12px;font-weight:600;letter-spacing:.06em;color:var(--muted);width:2.4em}
+.chips{flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:600;white-space:nowrap}
+.chips button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+
+.dials{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.dial{min-width:0;display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 8px}
+.dial label{font-size:12px;letter-spacing:.06em;color:var(--muted)}
+.dial output{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.dial input{grid-column:1/-1;width:100%;margin:2px 0 0;accent-color:var(--accent);height:24px}
+
+.bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.pair{display:flex;gap:8px;min-width:0}
+.side{flex:1;display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 6px;font-weight:600;min-height:44px;white-space:nowrap}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:0}
+.bar .seg{min-height:44px;border-radius:10px}
+.shutter{width:68px;height:68px;border-radius:50%;border:3px solid var(--fg);background:none;padding:4px}
+.shutter i{display:block;width:100%;height:100%;border-radius:50%;background:var(--fg);transition:transform .15s,border-radius .15s,background .15s}
+.shutter.video i{background:var(--rec)}
+.shutter.rec i{border-radius:8px;transform:scale(.5)}
+.shutter:active i{transform:scale(.86)}
+.shutter.rec:active i{transform:scale(.45)}
+.shutter[disabled]{opacity:.5}
+
+/* 视频元素不能用 display:none，否则 iPhone 上画面会停住。 */
+#v{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+.sheet{position:fixed;inset:0;z-index:30;background:rgba(10,12,15,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px))}
+.sheet img,.sheet video{max-width:100%;max-height:68%;border-radius:8px;-webkit-touch-callout:default;user-select:auto;-webkit-user-select:auto}
+.sheet p{margin:0;color:var(--muted);text-align:center}
+.sheet .pair{width:100%;max-width:360px}
+.sheet .go{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.toast{position:fixed;left:50%;top:max(24px,env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--fg);color:var(--body);padding:8px 14px;border-radius:8px;font-weight:600;z-index:20;max-width:80%;text-align:center}
+
+@media (orientation:landscape){
+  body{flex-direction:row;gap:14px}
+  .panel{width:320px;flex:none;overflow-y:auto;justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+  <div class="finder" id="finder">
+    <canvas id="gl"></canvas>
+    <canvas id="hud"></canvas>
+    <div class="flash" id="flash"></div>
+    <div class="count" id="count" hidden></div>
+    <div class="note" id="note" hidden></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="top">
+    <h1>ACTION<span>·</span>CCD</h1>
+    <div class="seg" id="ratios">
+      <button data-r="16:9" aria-pressed="false">16:9</button>
+      <button data-r="4:3" aria-pressed="true">4:3</button>
+      <button data-r="1:1" aria-pressed="false">1:1</button>
+      <button data-r="9:16" aria-pressed="false">9:16</button>
+    </div>
+  </div>
+
+  <div class="row"><b>视角</b><div class="chips" id="lenses"></div></div>
+  <div class="row"><b>色彩</b><div class="chips" id="profiles"></div></div>
+  <div class="row"><b>辅助</b><div class="chips">
+    <button id="timerbtn" aria-pressed="false">定时 关</button>
+    <button id="stampbtn" aria-pressed="true">日期水印</button>
+    <button id="gridbtn" aria-pressed="false">网格线</button>
+    <button id="hudbtn" aria-pressed="true">取景信息</button>
+    <button id="tunebtn" aria-pressed="false">微调</button>
+  </div></div>
+
+  <div class="dials" id="dials" hidden>
+    <div class="dial"><label for="k">广角畸变</label><output id="k-o"></output><input id="k" type="range" min="0" max="100" value="60"></div>
+    <div class="dial"><label for="vig">暗角</label><output id="vig-o"></output><input id="vig" type="range" min="0" max="100" value="40"></div>
+    <div class="dial"><label for="sat">饱和度</label><output id="sat-o"></output><input id="sat" type="range" min="0" max="200" value="115"></div>
+    <div class="dial"><label for="con">对比度</label><output id="con-o"></output><input id="con" type="range" min="50" max="150" value="108"></div>
+    <div class="dial"><label for="bloom">高光溢出</label><output id="bloom-o"></output><input id="bloom" type="range" min="0" max="100" value="60"></div>
+    <div class="dial"><label for="grain">噪点</label><output id="grain-o"></output><input id="grain" type="range" min="0" max="100" value="35"></div>
+    <div class="dial"><label for="ca">边缘色散</label><output id="ca-o"></output><input id="ca" type="range" min="0" max="100" value="35"></div>
+    <div class="dial"><label for="expo">曝光</label><output id="expo-o"></output><input id="expo" type="range" min="-100" max="100" value="25"></div>
+  </div>
+
+  <div class="bar">
+    <div class="pair">
+      <label class="side filebtn">相册<input id="file" type="file" accept="image/*"></label>
+      <button class="side" id="lens">换镜头</button>
+    </div>
+    <button class="shutter" id="shutter" aria-label="快门"><i></i></button>
+    <div class="seg" id="modes">
+      <button data-m="photo" aria-pressed="true">拍照</button>
+      <button data-m="video" aria-pressed="false">录像</button>
+    </div>
+  </div>
+</div>
+
+<video id="v" playsinline muted autoplay></video>
+<div class="sheet" id="sheet" hidden>
+  <img id="sheetimg" alt="刚拍的照片" hidden>
+  <video id="sheetvid" controls playsinline hidden></video>
+  <p id="sheettip"></p>
+  <div class="pair"><button class="side" id="sheetclose">关闭</button><button class="side go" id="sheetsave">保存 / 分享</button></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+var $=function(id){return document.getElementById(id);};
+var glc=$('gl'), hudc=$('hud'), finder=$('finder'), stage=$('stage'), video=$('v'), note=$('note');
+var gl=glc.getContext('webgl',{antialias:false,premultipliedAlpha:false});
+if(!gl){note.textContent='这台手机的系统 WebView 不支持 WebGL，滤镜无法运行。';note.hidden=false;return;}
+
+/* 色彩模式。CCD 两档模拟老卡片机：高光溢出、偏色、抬黑、彩色噪点、画面偏软。 */
+var PROFILES=[
+  {n:'CCD 冷白',tag:'CCD COOL',sat:115,con:108,expo:25,bloom:60,grain:35,temp:-.12,tint:.05, fade:.14,split:0, cn:1, shp:.15},
+  {n:'CCD 暖调',tag:'CCD WARM',sat:125,con:106,expo:20,bloom:55,grain:35,temp:.14, tint:-.03,fade:.16,split:0, cn:1, shp:.15},
+  {n:'CCD 闪光',tag:'CCD FLASH',sat:110,con:122,expo:45,bloom:80,grain:30,temp:-.05,tint:.02, fade:.06,split:0, cn:1, shp:.2},
+  {n:'鲜艳',    tag:'VIVID',   sat:150,con:115,expo:5, bloom:0, grain:12,temp:.06, tint:0,   fade:0,  split:0, cn:0, shp:.7},
+  {n:'标准',    tag:'NORMAL',  sat:110,con:105,expo:0, bloom:0, grain:10,temp:0,   tint:0,   fade:0,  split:0, cn:0, shp:.7},
+  {n:'平调 LOG',tag:'FLAT',    sat:70, con:75, expo:0, bloom:0, grain:10,temp:0,   tint:0,   fade:.5, split:0, cn:0, shp:.5},
+  {n:'青橙电影',tag:'CINE',    sat:115,con:112,expo:0, bloom:15,grain:18,temp:.04, tint:0,   fade:.12,split:.8,cn:0, shp:.6},
+  {n:'黑白',    tag:'MONO',    sat:0,  con:125,expo:0, bloom:10,grain:30,temp:0,   tint:0,   fade:0,  split:0, cn:0, shp:.6}
+];
+/* 视角预设，对应运动相机的数字镜头。 */
+var LENSES=[
+  {n:'超广角',k:100,z:1},
+  {n:'广角',  k:60, z:1},
+  {n:'线性',  k:0,  z:1},
+  {n:'窄角',  k:0,  z:1.6}
+];
+var prof=PROFILES[0], lensP=LENSES[1], zoom=1, ratio=4/3, imgAspect=1, mirror=false;
+var showHud=true, showGrid=false, showStamp=true, timerSec=0, mode='photo';
+var live=false, stream=null, devices=[], devIdx=0, starting=false, counting=false;
+var rec=null, recording=false, recStart=0, recQ=Promise.resolve(), recAudio=null;
+
+/* ---------- 着色器 ---------- */
+var VS='attribute vec2 a;varying vec2 v;void main(){v=a*.5+.5;gl_Position=vec4(a,0.,1.);}';
+var FS=[
+'precision highp float;',
+'uniform sampler2D T;uniform vec2 res,texel;',
+'uniform float ia,k,zoom,ca,vig,sat,con,grain,temp,tint,fade,split,expo,mir,bloom,cn,shp,tm;',
+'varying vec2 v;',
+'float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}',
+'vec3 hl(vec2 c,vec2 o){return max(texture2D(T,c+o*texel*5.).rgb-.6,0.);}',
+'void main(){',
+'  float oa=res.x/res.y;vec2 a=vec2(oa,1.);float L=length(a);',
+'  vec2 p=(v-.5)*2.*a/L;float r2=dot(p,p);',
+'  vec2 q=p*(1.+k*r2+.35*k*r2*r2)/(1.+1.35*k);',
+'  vec2 u=q*L/(2.*a);',
+'  vec2 s=ia>oa?vec2(oa/ia,1.):vec2(1.,ia/oa);',
+'  vec2 c=u*s/zoom+.5;',
+'  if(mir>.5)c.x=1.-c.x;',
+'  vec2 d=(c-.5)*ca*.014*r2;',
+'  vec3 m=texture2D(T,c).rgb;',
+'  vec3 col=vec3(texture2D(T,c+d).r,m.g,texture2D(T,c-d).b);',
+'  vec3 bl=(texture2D(T,c+vec2(texel.x,0.)).rgb+texture2D(T,c-vec2(texel.x,0.)).rgb+texture2D(T,c+vec2(0.,texel.y)).rgb+texture2D(T,c-vec2(0.,texel.y)).rgb)*.25;',
+'  col=mix(col,bl,cn*.35);',
+'  col+=(m-bl)*shp;',
+'  if(bloom>0.){',
+'    vec3 g=hl(c,vec2(1.,0.))+hl(c,vec2(-1.,0.))+hl(c,vec2(0.,1.))+hl(c,vec2(0.,-1.))',
+'          +hl(c,vec2(.7,.7))+hl(c,vec2(-.7,.7))+hl(c,vec2(.7,-.7))+hl(c,vec2(-.7,-.7))',
+'          +hl(c,vec2(2.,0.))+hl(c,vec2(-2.,0.))+hl(c,vec2(0.,2.))+hl(c,vec2(0.,-2.));',
+'    col+=g*bloom*.22;',
+'  }',
+'  col*=exp2(expo);',
+'  col.r*=1.+temp*.3;col.b*=1.-temp*.3;col.g*=1.+tint;',
+'  col=(col-.5)*con+.5;',
+'  float l=dot(col,vec3(.299,.587,.114));',
+'  col=mix(vec3(l),col,sat);',
+'  col+=split*mix(vec3(-.05,.02,.07),vec3(.07,.02,-.06),smoothstep(0.,1.,l));',
+'  col=mix(col,vec3(.5),fade*.3)+fade*.05;',
+'  col*=1.-vig*.85*smoothstep(.35,1.05,sqrt(r2));',
+'  vec2 np=v*res+tm;',
+'  float n1=h(np)-.5;',
+'  vec3 nc=vec3(h(np+17.3),h(np+41.7),h(np+73.1))-.5;',
+'  col+=mix(vec3(n1),nc,cn*.7)*grain*.16*(1.2-l*.6);',
+'  gl_FragColor=vec4(clamp(col,0.,1.),1.);',
+'}'].join('\n');
+function sh(t,src){var s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+var pg=gl.createProgram();gl.attachShader(pg,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pg,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pg);gl.useProgram(pg);
+gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+var al=gl.getAttribLocation(pg,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+var U={};['res','texel','ia','k','zoom','ca','vig','sat','con','grain','temp','tint','fade','split','expo','mir','bloom','cn','shp','tm'].forEach(function(n){U[n]=gl.getUniformLocation(pg,n);});
+var tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));
+var texW=1,texH=1,tick=0;
+function upload(src,w,h){texW=w;texH=h;imgAspect=w/h;gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);}
+
+function val(id){return +$(id).value;}
+function draw(){
+  gl.viewport(0,0,glc.width,glc.height);
+  gl.uniform2f(U.res,glc.width,glc.height);
+  gl.uniform2f(U.texel,1.5/texW,1.5/texH);
+  gl.uniform1f(U.ia,imgAspect);
+  gl.uniform1f(U.k,val('k')/100*.95);
+  gl.uniform1f(U.zoom,zoom);
+  gl.uniform1f(U.ca,val('ca')/100);
+  gl.uniform1f(U.vig,val('vig')/100);
+  gl.uniform1f(U.sat,val('sat')/100);
+  gl.uniform1f(U.con,val('con')/100);
+  gl.uniform1f(U.grain,val('grain')/100);
+  gl.uniform1f(U.bloom,val('bloom')/100);
+  gl.uniform1f(U.expo,val('expo')/100);
+  gl.uniform1f(U.temp,prof.temp);gl.uniform1f(U.tint,prof.tint);gl.uniform1f(U.fade,prof.fade);gl.uniform1f(U.split,prof.split);
+  gl.uniform1f(U.cn,prof.cn);gl.uniform1f(U.shp,prof.shp);
+  gl.uniform1f(U.mir,live&&mirror?1:0);
+  gl.uniform1f(U.tm,live?(tick%64)*7.13:0);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+
+/* ---------- 取景信息、日期水印、网格 ---------- */
+function fov(){return Math.round((75+val('k')/100*80)/zoom);}
+function pad(n){return (n<10?'0':'')+n;}
+function drawStamp(ctx,w,h){
+  var u=Math.min(w,h)/60,d=new Date();
+  var t="'"+pad(d.getFullYear()%100)+' '+pad(d.getMonth()+1)+' '+pad(d.getDate());
+  ctx.save();
+  ctx.font='700 '+(4.2*u)+'px "Courier New",monospace';ctx.textAlign='right';ctx.textBaseline='alphabetic';
+  ctx.shadowColor='rgba(255,90,0,.9)';ctx.shadowBlur=u*1.2;ctx.fillStyle='#ffb347';
+  ctx.fillText(t,w-6*u,h-(showHud?10:5)*u);
+  ctx.restore();
+}
+function drawHUD(ctx,w,h,forExport){
+  ctx.clearRect(0,0,w,h);
+  var u=Math.min(w,h)/60, m=3*u, f=3.3*u, b=5*u;
+  if(showGrid&&!forExport){
+    ctx.save();ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1;ctx.beginPath();
+    ctx.moveTo(w/3,0);ctx.lineTo(w/3,h);ctx.moveTo(2*w/3,0);ctx.lineTo(2*w/3,h);
+    ctx.moveTo(0,h/3);ctx.lineTo(w,h/3);ctx.moveTo(0,2*h/3);ctx.lineTo(w,2*h/3);ctx.stroke();ctx.restore();
+  }
+  if(showStamp)drawStamp(ctx,w,h);
+  if(!showHud)return;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=u*.8;
+  ctx.strokeStyle='#fff';ctx.fillStyle='#fff';ctx.lineWidth=Math.max(1,u*.35);ctx.lineCap='square';
+  [[m,m,1,1],[w-m,m,-1,1],[m,h-m,1,-1],[w-m,h-m,-1,-1]].forEach(function(c){
+    ctx.beginPath();ctx.moveTo(c[0]+c[2]*b,c[1]);ctx.lineTo(c[0],c[1]);ctx.lineTo(c[0],c[1]+c[3]*b);ctx.stroke();});
+  ctx.font='600 '+f+'px sans-serif';ctx.textBaseline='middle';
+  var ty=m+2.6*u, by=h-m-2.6*u, tx=m+2*u, label;
+  if(recording){
+    var s=Math.floor((Date.now()-recStart)/1000);
+    label='REC '+pad(Math.floor(s/60))+':'+pad(s%60);
+    if(s%2===0){ctx.fillStyle='#ff3b30';ctx.beginPath();ctx.arc(tx+u,ty,u*1.1,0,7);ctx.fill();ctx.fillStyle='#fff';}
+    ctx.textAlign='left';ctx.fillText(label,tx+3.2*u,ty);
+  }else{
+    label=!live?'ALBUM':(mode==='video'?'VIDEO':'PHOTO');
+    ctx.textAlign='left';ctx.fillText(label,tx,ty);
+  }
+  var bw=6*u,bh=3*u,bx=w-m-2*u-bw;
+  ctx.strokeRect(bx,ty-bh/2,bw,bh);ctx.fillRect(bx+bw,ty-bh/4,u*.6,bh/2);ctx.fillRect(bx+u*.6,ty-bh/2+u*.6,bw*.68,bh-u*1.2);
+  ctx.textAlign='right';ctx.fillText(texW>1?(texW+'×'+texH):'',bx-2*u,ty);
+  ctx.textAlign='left';ctx.fillText(lensP.n+' '+fov()+'°',tx,by);
+  ctx.textAlign='right';ctx.fillText(prof.tag,w-m-2*u,by);
+  ctx.restore();
+}
+var hctx=hudc.getContext('2d');
+function paintHud(){drawHUD(hctx,hudc.width,hudc.height,false);}
+function paint(){draw();paintHud();}
+
+/* ---------- 布局 ---------- */
+function fit(){
+  var r=stage.getBoundingClientRect();if(!r.width||!r.height)return;
+  var w=Math.min(r.width,r.height*ratio),h=w/ratio,d=Math.min(2,window.devicePixelRatio||1);
+  finder.style.width=w+'px';finder.style.height=h+'px';
+  hudc.width=Math.round(w*d);hudc.height=Math.round(h*d);
+  /* 录像模式下把画布放大到长边 1280，录出来的视频才够清楚。 */
+  var g=mode==='video'?1280/Math.max(w,h):d;
+  glc.width=Math.round(w*g/2)*2;glc.height=Math.round(h*g/2)*2;
+  paint();
+}
+window.addEventListener('resize',function(){if(!recording)fit();});
+
+/* ---------- 摄像头 ---------- */
+function stopCam(){
+  if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}
+  video.srcObject=null;
+}
+function showNote(t){note.textContent=t;note.hidden=false;}
+function startCam(){
+  if(starting)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showNote('这台手机的系统 WebView 不支持调用摄像头，可以先用「相册」。');return;}
+  starting=true;stopCam();
+  var vc={width:{ideal:2560},height:{ideal:1440}};
+  if(devices.length&&devices[devIdx])vc.deviceId={exact:devices[devIdx].deviceId};else vc.facingMode={ideal:'environment'};
+  navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(s){
+    stream=s;video.srcObject=s;
+    var track=s.getVideoTracks()[0],st=track.getSettings?track.getSettings():{};
+    mirror=st.facingMode==='user'||/front|user|前/i.test(track.label||'');
+    live=true;note.hidden=true;
+    var p=video.play();if(p&&p.catch)p.catch(function(){});
+    if(!devices.length){
+      return navigator.mediaDevices.enumerateDevices().then(function(list){
+        devices=list.filter(function(d){return d.kind==='videoinput';});
+        for(var i=0;i<devices.length;i++)if(devices[i].deviceId===st.deviceId)devIdx=i;
+      });
+    }
+  }).catch(function(){
+    live=false;
+    showNote('相机打不开。请到 系统设置 → 应用 → 运动相机 → 权限 里允许相机，然后重新打开。也可以先用「相册」选照片。');
+  }).then(function(){starting=false;paint();});
+}
+function frame(){
+  tick++;
+  if(live&&video.readyState>=2&&video.videoWidth){
+    upload(video,video.videoWidth,video.videoHeight);
+    draw();
+  }
+  requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){if(recording)stopRec();if(live)stopCam();}
+  else if(live)startCam();
+});
+
+/* ---------- 控件 ---------- */
+function press(wrap,btn){Array.prototype.forEach.call(wrap.children,function(c){c.setAttribute('aria-pressed',c===btn);});}
+var fmt={k:function(){return fov()+'°';},sat:function(v){return (v/100).toFixed(2);},con:function(v){return (v/100).toFixed(2);},
+  expo:function(v){return (v>0?'+':'')+(v/100).toFixed(1)+' EV';}};
+var DIALS=['k','vig','sat','con','bloom','grain','ca','expo'];
+DIALS.forEach(function(id){
+  var el=$(id),o=$(id+'-o');
+  el._up=function(){o.textContent=fmt[id]?fmt[id](+el.value):el.value;};
+  el.addEventListener('input',function(){el._up();paint();});el._up();
+});
+function setDial(id,v){$(id).value=v;$(id)._up();}
+
+var pwrap=$('profiles');
+function applyProfile(p){prof=p;['sat','con','expo','bloom','grain'].forEach(function(id){setDial(id,p[id]);});}
+PROFILES.forEach(function(p){
+  var b=document.createElement('button');b.textContent=p.n;b.setAttribute('aria-pressed',p===prof);
+  b.onclick=function(){applyProfile(p);press(pwrap,b);paint();};
+  pwrap.appendChild(b);
+});
+applyProfile(prof);
+
+var lwrap=$('lenses');
+LENSES.forEach(function(l){
+  var b=document.createElement('button');b.textContent=l.n;b.setAttribute('aria-pressed',l===lensP);
+  b.onclick=function(){lensP=l;zoom=l.z;setDial('k',l.k);press(lwrap,b);paint();};
+  lwrap.appendChild(b);
+});
+
+$('ratios').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  if(recording){toast('录像中不能换画幅');return;}
+  var p=b.dataset.r.split(':');ratio=p[0]/p[1];press($('ratios'),b);fit();
+});
+function toggle(id,fn){$(id).onclick=function(e){var on=fn();e.currentTarget.setAttribute('aria-pressed',on);paint();};}
+toggle('hudbtn',function(){return showHud=!showHud;});
+toggle('gridbtn',function(){return showGrid=!showGrid;});
+toggle('stampbtn',function(){return showStamp=!showStamp;});
+toggle('tunebtn',function(){var d=$('dials');d.hidden=!d.hidden;setTimeout(fit,0);return !d.hidden;});
+$('timerbtn').onclick=function(e){
+  timerSec=timerSec===0?3:(timerSec===3?10:0);
+  e.currentTarget.textContent='定时 '+(timerSec?timerSec+' 秒':'关');
+  e.currentTarget.setAttribute('aria-pressed',timerSec>0);
+};
+
+var shutter=$('shutter');
+$('modes').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  if(recording){toast('先停止录像');return;}
+  mode=b.dataset.m;press($('modes'),b);
+  shutter.classList.toggle('video',mode==='video');fit();
+});
+
+var lensBtn=$('lens');
+lensBtn.onclick=function(){
+  if(!live){lensBtn.textContent='换镜头';live=true;startCam();return;}
+  if(devices.length<2){toast('这台手机只向应用开放了一个镜头');return;}
+  devIdx=(devIdx+1)%devices.length;startCam();
+  toast('镜头 '+(devIdx+1)+' / '+devices.length);
+};
+
+var toastT;
+function toast(msg){var t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true;},2400);}
+
+$('file').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  if(recording){toast('先停止录像');e.target.value='';return;}
+  var url=URL.createObjectURL(f),im=new Image();
+  im.onload=function(){
+    var sc=Math.min(1,3840/Math.max(im.naturalWidth,im.naturalHeight));
+    var c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.naturalWidth*sc));c.height=Math.max(1,Math.round(im.naturalHeight*sc));
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    stopCam();live=false;note.hidden=true;lensBtn.textContent='回到实时';
+    upload(c,c.width,c.height);paint();
+  };
+  im.onerror=function(){URL.revokeObjectURL(url);toast('这张图片打不开，换一张试试');};
+  im.src=url;e.target.value='';
+});
+
+/* 没有安卓外壳时（在电脑浏览器里测试），照片和视频改成下载到电脑。 */
+var isApp=!!(window.Android&&window.Android.saveJpeg), webChunks=null, webExt='';
+function dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();}
+function stampName(){var d=new Date();return 'ACTION_'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());}
+var isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+/* iPhone 的 Safari 不能直接把文件存进相册：拍完先预览，再由系统分享面板「存储图像 / 存储视频」。 */
+var sheetUrl=null, sheetFile=null;
+function showResult(blob,ext,type){
+  var isVid=type.indexOf('video')===0, name=stampName()+'.'+ext;
+  if(sheetUrl)URL.revokeObjectURL(sheetUrl);
+  sheetUrl=URL.createObjectURL(blob);
+  try{sheetFile=new File([blob],name,{type:type});}catch(e){sheetFile=null;}
+  $('sheetimg').hidden=isVid;$('sheetvid').hidden=!isVid;
+  if(isVid)$('sheetvid').src=sheetUrl;else $('sheetimg').src=sheetUrl;
+  $('sheettip').textContent=isVid?'点「保存 / 分享」，再选「存储视频」':'点「保存 / 分享」再选「存储图像」，或长按图片保存';
+  $('sheetsave').onclick=function(){
+    if(sheetFile&&navigator.canShare&&navigator.canShare({files:[sheetFile]}))navigator.share({files:[sheetFile]}).catch(function(){});
+    else dl(sheetUrl,name);
+  };
+  $('sheet').hidden=false;
+}
+$('sheetclose').onclick=function(){
+  $('sheet').hidden=true;$('sheetvid').pause();$('sheetvid').removeAttribute('src');$('sheetvid').load();
+};
+var WEB={
+  videoBegin:function(m,e){webChunks=[];webExt=e;return true;},
+  videoEnd:function(keep){
+    var ok=keep&&webChunks&&webChunks.length>0;
+    if(ok){
+      var blob=new Blob(webChunks,{type:'video/'+webExt});
+      if(isIOS)showResult(blob,webExt,'video/'+webExt);else dl(URL.createObjectURL(blob),stampName()+'.'+webExt);
+    }
+    webChunks=null;return ok;
+  }
+};
+var SAVED_PHOTO=isApp?'已保存到相册的 ActionCam 文件夹':'已下载到「下载」文件夹';
+var SAVED_VIDEO=isApp?'视频已保存到相册的 ActionCam 文件夹':(isIOS?'录好了':'视频已下载到「下载」文件夹');
+
+/* ---------- 拍照 ---------- */
+function capture(){
+  if(texW<=1){toast('还没有画面');return;}
+  var fl=$('flash');fl.classList.remove('on');void fl.offsetWidth;fl.classList.add('on');
+  try{
+    var LONG=Math.max(1280,Math.min(3840,Math.max(texW,texH)));
+    var W=ratio>=1?LONG:Math.round(LONG*ratio),H=ratio>=1?Math.round(LONG/ratio):LONG;
+    var pw=glc.width,ph=glc.height;
+    glc.width=W;glc.height=H;draw();
+    var out=document.createElement('canvas');out.width=W;out.height=H;var o=out.getContext('2d');
+    o.drawImage(glc,0,0);
+    if(showHud||showStamp){var layer=document.createElement('canvas');layer.width=W;layer.height=H;drawHUD(layer.getContext('2d'),W,H,true);o.drawImage(layer,0,0);}
+    glc.width=pw;glc.height=ph;paint();
+    var url=out.toDataURL('image/jpeg',.92);
+    if(isApp)toast(window.Android.saveJpeg(url.split(',')[1])?SAVED_PHOTO:'保存失败，请检查存储空间');
+    else if(isIOS)out.toBlob(function(b){if(b)showResult(b,'jpg','image/jpeg');else toast('生成图片失败，请再试一次');},'image/jpeg',.92);
+    else{dl(url,stampName()+'.jpg');toast(SAVED_PHOTO);}
+  }catch(err){toast('拍照失败：'+(err&&err.message||err));}
+}
+function countdown(n,done){
+  var c=$('count');counting=true;c.hidden=false;c.textContent=n;
+  var t=setInterval(function(){
+    n--;
+    if(n<=0){clearInterval(t);c.hidden=true;counting=false;done();}
+    else c.textContent=n;
+  },1000);
+}
+
+/* ---------- 录像：录的是加了滤镜的画面，分段交给安卓写进相册 ---------- */
+function pickMime(){
+  var c=[['video/mp4','mp4'],['video/webm;codecs=vp9','webm'],['video/webm','webm']];
+  for(var i=0;i<c.length;i++)if(MediaRecorder.isTypeSupported(c[i][0]))return c[i];
+  return null;
+}
+function sendChunk(blob){
+  if(webChunks){webChunks.push(blob);return Promise.resolve();}
+  return new Promise(function(res){
+    var fr=new FileReader();
+    fr.onload=function(){var s=fr.result;try{window.Android.videoChunk(s.substring(s.indexOf(',')+1));}catch(e){}res();};
+    fr.onerror=function(){res();};
+    fr.readAsDataURL(blob);
+  });
+}
+function startRec(){
+  if(!live){toast('录像需要实时画面，先点「回到实时」');return;}
+  if(!window.MediaRecorder||!glc.captureStream){toast('这台手机的系统 WebView 不支持录像');return;}
+  var A=isApp?window.Android:WEB;
+  var m=pickMime();
+  if(!m){toast('这台手机的系统 WebView 不支持录像');return;}
+  shutter.disabled=true;
+  var go=function(aud){
+    shutter.disabled=false;
+    if(!A.videoBegin(m[0].split(';')[0],m[1])){if(aud)aud.getTracks().forEach(function(t){t.stop();});toast('无法创建视频文件');return;}
+    recAudio=aud;
+    var ms=glc.captureStream(30);
+    if(aud)aud.getAudioTracks().forEach(function(t){ms.addTrack(t);});
+    try{rec=new MediaRecorder(ms,{mimeType:m[0],videoBitsPerSecond:12000000});}
+    catch(e){A.videoEnd(false);if(aud)aud.getTracks().forEach(function(t){t.stop();});toast('录像启动失败');return;}
+    recQ=Promise.resolve();
+    rec.ondataavailable=function(e){
+      if(!e.data||!e.data.size)return;
+      var blob=e.data;recQ=recQ.then(function(){return sendChunk(blob);});
+    };
+    rec.onstop=function(){
+      if(recAudio){recAudio.getTracks().forEach(function(t){t.stop();});recAudio=null;}
+      recQ=recQ.then(function(){toast(A.videoEnd(true)?SAVED_VIDEO:'视频保存失败');});
+    };
+    rec.start(1000);
+    recStart=Date.now();recording=true;shutter.classList.add('rec');paintHud();
+  };
+  navigator.mediaDevices.getUserMedia({audio:true,video:false}).then(go,function(){toast('没拿到麦克风，这段录像没有声音');go(null);});
+}
+function stopRec(){
+  if(!recording)return;
+  recording=false;shutter.classList.remove('rec');
+  try{rec.stop();}catch(e){}
+  paintHud();
+}
+
+shutter.onclick=function(){
+  if(counting)return;
+  if(mode==='video'){if(recording)stopRec();else startRec();return;}
+  if(timerSec>0)countdown(timerSec,capture);else capture();
+};
+
+setInterval(function(){if(!document.hidden)paintHud();},500);
+fit();
+requestAnimationFrame(frame);
+startCam();
+})();
+</script>
+</body>
+</html>
