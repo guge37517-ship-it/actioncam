@@ -113,6 +113,7 @@ h1 span{color:var(--accent)}
   <div class="row"><b>视角</b><div class="chips" id="lenses"></div></div>
   <div class="row"><b>色彩</b><div class="chips" id="profiles"></div></div>
   <div class="row"><b>辅助</b><div class="chips">
+    <button id="resbtn" aria-pressed="false">画质 2K</button>
     <button id="timerbtn" aria-pressed="false">定时 关</button>
     <button id="stampbtn" aria-pressed="true">日期水印</button>
     <button id="gridbtn" aria-pressed="false">网格线</button>
@@ -184,6 +185,8 @@ var LENSES=[
 var prof=PROFILES[0], lensP=LENSES[1], zoom=1, ratio=4/3, imgAspect=1, mirror=false;
 var showHud=true, showGrid=false, showStamp=true, timerSec=0, mode='photo';
 var live=false, stream=null, devices=[], devIdx=0, starting=false, counting=false;
+var hi=false;
+try{hi=localStorage.getItem('actioncam-res')==='4k';}catch(e){}
 var rec=null, recording=false, recStart=0, recQ=Promise.resolve(), recAudio=null;
 
 /* ---------- 着色器 ---------- */
@@ -323,7 +326,7 @@ function fit(){
   finder.style.width=w+'px';finder.style.height=h+'px';
   hudc.width=Math.round(w*d);hudc.height=Math.round(h*d);
   /* 录像模式下把画布放大到长边 1280，录出来的视频才够清楚。 */
-  var g=mode==='video'?1280/Math.max(w,h):d;
+  var g=mode==='video'?(hi?1920:1280)/Math.max(w,h):d;
   glc.width=Math.round(w*g/2)*2;glc.height=Math.round(h*g/2)*2;
   paint();
 }
@@ -339,7 +342,7 @@ function startCam(){
   if(starting)return;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showNote('这台手机的系统 WebView 不支持调用摄像头，可以先用「相册」。');return;}
   starting=true;stopCam();
-  var vc={width:{ideal:2560},height:{ideal:1440}};
+  var vc=hi?{width:{ideal:3840},height:{ideal:2160}}:{width:{ideal:2560},height:{ideal:1440}};
   if(devices.length&&devices[devIdx])vc.deviceId={exact:devices[devIdx].deviceId};else vc.facingMode={ideal:'environment'};
   navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(s){
     stream=s;video.srcObject=s;
@@ -410,6 +413,22 @@ toggle('hudbtn',function(){return showHud=!showHud;});
 toggle('gridbtn',function(){return showGrid=!showGrid;});
 toggle('stampbtn',function(){return showStamp=!showStamp;});
 toggle('tunebtn',function(){var d=$('dials');d.hidden=!d.hidden;setTimeout(fit,0);return !d.hidden;});
+/* 画质：向手机申请 2K 或 4K 的取景画面。手机给不了 4K 时会自动退到它支持的最高规格。 */
+var resBtn=$('resbtn');
+function showRes(){resBtn.textContent='画质 '+(hi?'4K':'2K');resBtn.setAttribute('aria-pressed',hi);}
+showRes();
+resBtn.onclick=function(){
+  if(recording){toast('先停止录像');return;}
+  hi=!hi;showRes();
+  try{localStorage.setItem('actioncam-res',hi?'4k':'2k');}catch(e){}
+  if(!live){toast('回到实时取景后生效');return;}
+  startCam();fit();
+  setTimeout(function(){
+    if(!live||texW<=1)return;
+    var got=Math.max(texW,texH);
+    toast(hi&&got<3840?'这台手机没给到 4K，当前 '+texW+'×'+texH:'当前画面 '+texW+'×'+texH);
+  },1800);
+};
 $('timerbtn').onclick=function(e){
   timerSec=timerSec===0?3:(timerSec===3?10:0);
   e.currentTarget.textContent='定时 '+(timerSec?timerSec+' 秒':'关');
