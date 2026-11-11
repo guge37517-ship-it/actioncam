@@ -165,6 +165,9 @@ var PROFILES=[
   {n:'CCD 冷白',tag:'CCD COOL',sat:115,con:108,expo:25,bloom:60,grain:35,temp:-.12,tint:.05, fade:.14,split:0, cn:1, shp:.15},
   {n:'CCD 暖调',tag:'CCD WARM',sat:125,con:106,expo:20,bloom:55,grain:35,temp:.14, tint:-.03,fade:.16,split:0, cn:1, shp:.15},
   {n:'CCD 闪光',tag:'CCD FLASH',sat:110,con:122,expo:45,bloom:80,grain:30,temp:-.05,tint:.02, fade:.06,split:0, cn:1, shp:.2},
+  /* 运动相机直出：高饱和、高反差、强锐化、干净无颗粒，选中时顺带切到对应视角。 */
+  {n:'运动 鲜明',tag:'ACTION VIVID',  sat:140,con:120,expo:8, bloom:0, grain:4, temp:.05, tint:.02, fade:0,  split:.15,cn:0, shp:1.1,lens:0},
+  {n:'运动 自然',tag:'ACTION NATURAL',sat:118,con:110,expo:0, bloom:0, grain:4, temp:-.04,tint:0,   fade:.03,split:.3, cn:0, shp:.9, lens:1},
   {n:'鲜艳',    tag:'VIVID',   sat:150,con:115,expo:5, bloom:0, grain:12,temp:.06, tint:0,   fade:0,  split:0, cn:0, shp:.7},
   {n:'标准',    tag:'NORMAL',  sat:110,con:105,expo:0, bloom:0, grain:10,temp:0,   tint:0,   fade:0,  split:0, cn:0, shp:.7},
   {n:'平调 LOG',tag:'FLAT',    sat:70, con:75, expo:0, bloom:0, grain:10,temp:0,   tint:0,   fade:.5, split:0, cn:0, shp:.5},
@@ -384,15 +387,16 @@ var pwrap=$('profiles');
 function applyProfile(p){prof=p;['sat','con','expo','bloom','grain'].forEach(function(id){setDial(id,p[id]);});}
 PROFILES.forEach(function(p){
   var b=document.createElement('button');b.textContent=p.n;b.setAttribute('aria-pressed',p===prof);
-  b.onclick=function(){applyProfile(p);press(pwrap,b);paint();};
+  b.onclick=function(){applyProfile(p);press(pwrap,b);if(p.lens!=null)setLens(p.lens);paint();};
   pwrap.appendChild(b);
 });
 applyProfile(prof);
 
 var lwrap=$('lenses');
-LENSES.forEach(function(l){
+function setLens(i){var l=LENSES[i];lensP=l;zoom=l.z;setDial('k',l.k);press(lwrap,lwrap.children[i]);}
+LENSES.forEach(function(l,i){
   var b=document.createElement('button');b.textContent=l.n;b.setAttribute('aria-pressed',l===lensP);
-  b.onclick=function(){lensP=l;zoom=l.z;setDial('k',l.k);press(lwrap,b);paint();};
+  b.onclick=function(){setLens(i);paint();};
   lwrap.appendChild(b);
 });
 
